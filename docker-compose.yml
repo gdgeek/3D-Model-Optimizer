@@ -1,0 +1,21 @@
+services:
+  glb-optimizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount resource folder for test files
+      - ./resource:/app/resource
+      # Persist temp files (optional, for debugging)
+      - ./temp:/app/temp
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api-docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

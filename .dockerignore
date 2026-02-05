@@ -1,0 +1,13 @@
+node_modules
+dist
+temp
+.npm-cache
+*.log
+.git
+.gitignore
+.vscode
+*.md
+tests
+vitest.config.ts
+.kiro
+resource/*.glb

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三维模型优化 - 测试界面</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 { text-align: center; color: #333; margin-bottom: 30px; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h2 { color: #444; margin-bottom: 16px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+    .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; }
+    .upload-area:hover, .upload-area.dragover { border-color: #007bff; background: #f8f9ff; }
+    .upload-area input { display: none; }
+    .upload-area p { color: #666; margin-bottom: 10px; }
+    .upload-area .formats { font-size: 12px; color: #999; }
+    .upload-area .file-name { color: #007bff; font-weight: 500; margin-top: 10px; }
+    .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .option-group { background: #f8f9fa; padding: 16px; border-radius: 8px; }
+    .option-group h3 { font-size: 14px; color: #555; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .option-group label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: #666; }
+    .option-group input[type="checkbox"] { width: 16px; height: 16px; }
+    .option-group input[type="number"], .option-group select { width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .btn { padding: 12px 32px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: all 0.3s; }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-download { background: #28a745; color: white; margin-left: 10px; }
+    .btn-download:hover { background: #1e7e34; }
+    .actions { text-align: center; margin-top: 20px; }
+    .result { margin-top: 20px; }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .result-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat-item { background: #e8f4fd; padding: 12px; border-radius: 6px; text-align: center; }
+    .stat-item .value { font-size: 24px; font-weight: bold; color: #007bff; }
+    .stat-item .label { font-size: 12px; color: #666; margin-top: 4px; }
+    .steps-list { margin-top: 16px; }
+    .step-item { display: flex; align-items: center; padding: 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 8px; }
+    .step-item .icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 12px; }
+    .step-item .icon.success { background: #d4edda; color: #28a745; }
+    .step-item .icon.error { background: #f8d7da; color: #dc3545; }
+    .step-item .name { flex: 1; font-weight: 500; }
+    .step-item .duration { color: #666; font-size: 13px; }
+    .loading { display: none; text-align: center; padding: 40px; }
+    .loading.show { display: block; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .error-msg { background: #f8d7da; color: #721c24; padding: 16px; border-radius: 8px; margin-top: 16px; }
+    .hidden { display: none !important; }
+    
+    /* Model Info Styles */
+    .model-info { margin-top: 20px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .info-section { background: #f8f9fa; padding: 16px; border-radius: 8px; }
+    .info-section h3 { font-size: 14px; color: #333; margin-bottom: 12px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
+    .info-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #eee; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .label { color: #666; }
+    .info-row .value { color: #333; font-weight: 500; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 4px; }
+    .tag-success { background: #d4edda; color: #155724; }
+    .tag-warning { background: #fff3cd; color: #856404; }
+    .tag-info { background: #cce5ff; color: #004085; }
+    .tag-danger { background: #f8d7da; color: #721c24; }
+    .texture-list, .mesh-list { max-height: 200px; overflow-y: auto; }
+    .texture-item, .mesh-item { padding: 8px; background: white; border-radius: 4px; margin-bottom: 6px; font-size: 12px; }
+    .texture-item .name, .mesh-item .name { font-weight: 500; color: #333; }
+    .texture-item .meta, .mesh-item .meta { color: #888; margin-top: 4px; }
+    .summary-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-draco { background: #e8f5e9; color: #2e7d32; }
+    .badge-no-draco { background: #fff8e1; color: #f57f17; }
+    .badge-ktx2 { background: #e3f2fd; color: #1565c0; }
+    .badge-no-ktx2 { background: #fce4ec; color: #c62828; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 三维模型优化 测试界面</h1>
+    
+    <div class="card">
+      <h2>📁 上传 3D 模型文件</h2>
+      <div class="upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.stl,.fbx,.usdz,.dae,.step,.stp">
+        <p>点击或拖拽文件到此处</p>
+        <p class="formats">支持格式: GLB, GLTF, OBJ, STL, DAE, FBX*, USDZ*, STEP* (最大 100MB)<br><small>*FBX/USDZ/STEP 需要 Docker 环境</small></p>
+        <div class="file-name" id="fileName"></div>
+      </div>
+      
+      <div class="loading" id="analyzeLoading">
+        <div class="spinner"></div>
+        <p>正在分析模型...</p>
+      </div>
+      
+      <div class="model-info hidden" id="modelInfo">
+        <h3 style="margin: 20px 0 16px; color: #333;">📊 模型信息</h3>
+        <div class="summary-badges" id="summaryBadges"></div>
+        <div class="info-grid">
+          <div class="info-section">
+            <h3>基本信息</h3>
+            <div id="basicInfo"></div>
+          </div>
+          <div class="info-section">
+            <h3>网格信息</h3>
+            <div id="meshInfo"></div>
+            <div class="mesh-list" id="meshList"></div>
+          </div>
+          <div class="info-section">
+            <h3>材质信息</h3>
+            <div id="materialInfo"></div>
+          </div>
+          <div class="info-section">
+            <h3>纹理信息</h3>
+            <div id="textureInfo"></div>
+            <div class="texture-list" id="textureList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="optionsCard">
+      <h2>⚙️ 优化选项</h2>
+      <div class="options-grid">
+        <div class="option-group">
+          <h3><input type="checkbox" id="cleanEnabled" checked> 资源清理</h3>
+          <label><input type="checkbox" id="removeUnusedNodes" checked> 移除未使用节点</label>
+          <label><input type="checkbox" id="removeUnusedMaterials" checked> 移除未使用材质</label>
+          <label><input type="checkbox" id="removeUnusedTextures" checked> 移除未使用纹理</label>
+        </div>
+        <div class="option-group">
+          <h3><input type="checkbox" id="mergeEnabled"> Mesh 合并</h3>
+          <p style="font-size: 12px; color: #888;">合并相同材质的网格</p>
+        </div>
+        <div class="option-group">
+          <h3><input type="checkbox" id="simplifyEnabled"> 网格减面</h3>
+          <label>目标比例 <input type="number" id="targetRatio" value="0.5" min="0.1" max="1" step="0.1"></label>
+          <label><input type="checkbox" id="lockBorder"> 保留边界</label>
+        </div>
+        <div class="option-group">
+          <h3><input type="checkbox" id="quantizeEnabled"> 顶点量化</h3>
+          <label><input type="checkbox" id="quantizePosition" checked> 位置</label>
+          <label><input type="checkbox" id="quantizeNormal" checked> 法线</label>
+          <label><input type="checkbox" id="quantizeTexcoord" checked> UV</label>
+        </div>
+        <div class="option-group">
+          <h3><input type="checkbox" id="dracoEnabled"> Draco 压缩</h3>
+          <label>压缩级别 <input type="number" id="compressionLevel" value="7" min="0" max="10"></label>
+          <div id="dracoHint" class="hidden" style="font-size:11px;color:#28a745;margin-top:8px;">✓ 模型已使用 Draco</div>
+        </div>
+        <div class="option-group">
+          <h3><input type="checkbox" id="textureEnabled"> 纹理压缩</h3>
+          <label>模式 <select id="textureMode"><option value="ETC1S">ETC1S (高压缩)</option><option value="UASTC">UASTC (高质量)</option></select></label>
+          <div id="ktx2Hint" class="hidden" style="font-size:11px;color:#28a745;margin-top:8px;">✓ 模型已使用 KTX2</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="optimizeBtn" disabled>开始优化</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>正在优化中，请稍候...</p>
+    </div>
+
+    <div class="card result hidden" id="resultCard">
+      <div class="result-header">
+        <h2>📊 优化结果</h2>
+        <button class="btn btn-download" id="downloadBtn">下载优化文件</button>
+      </div>
+      <div class="result-stats">
+        <div class="stat-item"><div class="value" id="originalSize">-</div><div class="label">原始大小</div></div>
+        <div class="stat-item"><div class="value" id="optimizedSize">-</div><div class="label">优化后大小</div></div>
+        <div class="stat-item"><div class="value" id="savedSize">-</div><div class="label">节省空间</div></div>
+        <div class="stat-item"><div class="value" id="compressionRatio">-</div><div class="label">压缩比</div></div>
+        <div class="stat-item"><div class="value" id="processingTime">-</div><div class="label">处理时间</div></div>
+      </div>
+      <div class="steps-list" id="stepsList"></div>
+      
+      <!-- 压缩后模型信息 -->
+      <div class="model-info" id="optimizedModelInfo" style="margin-top:20px;">
+        <h3 style="margin-bottom:16px;color:#333;">📦 压缩后模型详情</h3>
+        <div class="info-grid">
+          <div class="info-section">
+            <h3>对比信息</h3>
+            <div id="compareInfo"></div>
+          </div>
+          <div class="info-section">
+            <h3>压缩后网格</h3>
+            <div id="optimizedMeshInfo"></div>
+          </div>
+          <div class="info-section">
+            <h3>压缩后纹理</h3>
+            <div id="optimizedTextureInfo"></div>
+          </div>
+          <div class="info-section">
+            <h3>使用的扩展</h3>
+            <div id="optimizedExtensions"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-msg hidden" id="errorMsg"></div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const loading = document.getElementById('loading');
+    const analyzeLoading = document.getElementById('analyzeLoading');
+    const resultCard = document.getElementById('resultCard');
+    const errorMsg = document.getElementById('errorMsg');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const modelInfo = document.getElementById('modelInfo');
+    const optionsCard = document.getElementById('optionsCard');
+    
+    let selectedFile = null;
+    let currentTaskId = null;
+    let modelAnalysis = null;
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+    async function handleFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const supported = ['glb', 'gltf', 'obj', 'stl', 'fbx', 'usdz'];
+      if (!supported.includes(ext)) { alert('不支持的文件格式'); return; }
+      if (file.size > 100 * 1024 * 1024) { alert('文件大小超过 100MB 限制'); return; }
+      
+      selectedFile = file;
+      fileName.textContent = `${file.name} (${formatSize(file.size)})`;
+      
+      // Reset UI
+      modelInfo.classList.add('hidden');
+      optionsCard.classList.add('hidden');
+      resultCard.classList.add('hidden');
+      errorMsg.classList.add('hidden');
+      optimizeBtn.disabled = true;
+      
+      // Analyze file
+      await analyzeFile(file);
+    }
+
+    async function analyzeFile(file) {
+      analyzeLoading.classList.add('show');
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+          modelAnalysis = data.analysis;
+          displayModelInfo(data.analysis);
+          modelInfo.classList.remove('hidden');
+          optionsCard.classList.remove('hidden');
+          optimizeBtn.disabled = false;
+          
+          // Update hints based on analysis
+          updateOptimizationHints(data.analysis);
+        } else {
+          errorMsg.textContent = `分析失败: ${data.error?.message || '未知错误'}`;
+          errorMsg.classList.remove('hidden');
+        }
+      } catch (err) {
+        errorMsg.textContent = `分析请求失败: ${err.message}`;
+        errorMsg.classList.remove('hidden');
+      } finally {
+        analyzeLoading.classList.remove('show');
+      }
+    }
+
+    function displayModelInfo(analysis) {
+      // Summary badges
+      const badges = document.getElementById('summaryBadges');
+      badges.innerHTML = `
+        <span class="badge ${analysis.hasDraco ? 'badge-draco' : 'badge-no-draco'}">
+          ${analysis.hasDraco ? '✓ Draco 压缩' : '✗ 无 Draco'}
+        </span>
+        <span class="badge ${analysis.hasKTX2 ? 'badge-ktx2' : 'badge-no-ktx2'}">
+          ${analysis.hasKTX2 ? '✓ KTX2 纹理' : '✗ 无 KTX2'}
+        </span>
+        ${analysis.converted ? `<span class="badge" style="background:#e0e0e0;color:#333;">从 ${analysis.format} 转换</span>` : ''}
+      `;
+      
+      // Basic info
+      document.getElementById('basicInfo').innerHTML = `
+        <div class="info-row"><span class="label">文件名</span><span class="value">${analysis.filename}</span></div>
+        <div class="info-row"><span class="label">文件大小</span><span class="value">${formatSize(analysis.fileSize)}</span></div>
+        <div class="info-row"><span class="label">原始格式</span><span class="value">${analysis.format}</span></div>
+        <div class="info-row"><span class="label">场景数</span><span class="value">${analysis.scenes}</span></div>
+        <div class="info-row"><span class="label">节点数</span><span class="value">${analysis.nodes}</span></div>
+        <div class="info-row"><span class="label">动画数</span><span class="value">${analysis.animations}</span></div>
+        <div class="info-row"><span class="label">扩展</span><span class="value">${analysis.extensions.length > 0 ? analysis.extensions.join(', ') : '无'}</span></div>
+      `;
+      
+      // Mesh info
+      document.getElementById('meshInfo').innerHTML = `
+        <div class="info-row"><span class="label">网格数量</span><span class="value">${analysis.meshes.count}</span></div>
+        <div class="info-row"><span class="label">总三角形</span><span class="value">${analysis.meshes.totalTriangles.toLocaleString()}</span></div>
+        <div class="info-row"><span class="label">总顶点数</span><span class="value">${analysis.meshes.totalVertices.toLocaleString()}</span></div>
+      `;
+      
+      const meshList = document.getElementById('meshList');
+      if (analysis.meshes.details.length > 0) {
+        meshList.innerHTML = analysis.meshes.details.slice(0, 10).map(m => `
+          <div class="mesh-item">
+            <div class="name">${m.name} ${m.hasDraco ? '<span class="tag tag-success">Draco</span>' : ''}</div>
+            <div class="meta">三角形: ${m.triangles.toLocaleString()} | 顶点: ${m.vertices.toLocaleString()}</div>
+          </div>
+        `).join('') + (analysis.meshes.details.length > 10 ? `<div style="text-align:center;color:#888;font-size:12px;">还有 ${analysis.meshes.details.length - 10} 个网格...</div>` : '');
+      }
+      
+      // Material info
+      document.getElementById('materialInfo').innerHTML = `
+        <div class="info-row"><span class="label">材质数量</span><span class="value">${analysis.materials.count}</span></div>
+      ` + analysis.materials.details.slice(0, 5).map(m => `
+        <div class="info-row">
+          <span class="label">${m.name}</span>
+          <span class="value">
+            ${m.hasBaseColorTexture ? '<span class="tag tag-info">颜色</span>' : ''}
+            ${m.hasNormalTexture ? '<span class="tag tag-info">法线</span>' : ''}
+            ${m.hasMetallicRoughnessTexture ? '<span class="tag tag-info">金属</span>' : ''}
+          </span>
+        </div>
+      `).join('');
+      
+      // Texture info
+      document.getElementById('textureInfo').innerHTML = `
+        <div class="info-row"><span class="label">纹理数量</span><span class="value">${analysis.textures.count}</span></div>
+        <div class="info-row"><span class="label">纹理总大小</span><span class="value">${formatSize(analysis.textures.totalSize)}</span></div>
+      `;
+      
+      const textureList = document.getElementById('textureList');
+      if (analysis.textures.details.length > 0) {
+        textureList.innerHTML = analysis.textures.details.map(t => `
+          <div class="texture-item">
+            <div class="name">${t.name} ${t.isKTX2 ? '<span class="tag tag-success">KTX2</span>' : `<span class="tag tag-warning">${t.mimeType}</span>`}</div>
+            <div class="meta">大小: ${formatSize(t.size)}</div>
+          </div>
+        `).join('');
+      } else {
+        textureList.innerHTML = '<div style="color:#888;font-size:12px;padding:8px;">无纹理</div>';
+      }
+    }
+
+    function updateOptimizationHints(analysis) {
+      const dracoHint = document.getElementById('dracoHint');
+      const ktx2Hint = document.getElementById('ktx2Hint');
+      
+      if (analysis.hasDraco) {
+        dracoHint.classList.remove('hidden');
+        document.getElementById('dracoEnabled').checked = false;
+      } else {
+        dracoHint.classList.add('hidden');
+      }
+      
+      if (analysis.hasKTX2) {
+        ktx2Hint.classList.remove('hidden');
+        document.getElementById('textureEnabled').checked = false;
+      } else {
+        ktx2Hint.classList.add('hidden');
+      }
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function getOptions() {
+      const options = {};
+      if (document.getElementById('cleanEnabled').checked) {
+        options.clean = { enabled: true, removeUnusedNodes: document.getElementById('removeUnusedNodes').checked, removeUnusedMaterials: document.getElementById('removeUnusedMaterials').checked, removeUnusedTextures: document.getElementById('removeUnusedTextures').checked };
+      }
+      if (document.getElementById('mergeEnabled').checked) options.merge = { enabled: true };
+      if (document.getElementById('simplifyEnabled').checked) {
+        options.simplify = { enabled: true, targetRatio: parseFloat(document.getElementById('targetRatio').value), lockBorder: document.getElementById('lockBorder').checked };
+      }
+      if (document.getElementById('quantizeEnabled').checked) {
+        options.quantize = { enabled: true, quantizePosition: document.getElementById('quantizePosition').checked, quantizeNormal: document.getElementById('quantizeNormal').checked, quantizeTexcoord: document.getElementById('quantizeTexcoord').checked };
+      }
+      if (document.getElementById('dracoEnabled').checked) {
+        options.draco = { enabled: true, compressionLevel: parseInt(document.getElementById('compressionLevel').value) };
+      }
+      if (document.getElementById('textureEnabled').checked) {
+        options.texture = { enabled: true, mode: document.getElementById('textureMode').value };
+      }
+      return options;
+    }
+
+    optimizeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      loading.classList.add('show');
+      resultCard.classList.add('hidden');
+      errorMsg.classList.add('hidden');
+      optimizeBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('options', JSON.stringify(getOptions()));
+
+      try {
+        const res = await fetch('/api/optimize', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+          currentTaskId = data.taskId;
+          
+          const originalBytes = data.originalSize;
+          const optimizedBytes = data.optimizedSize;
+          const savedBytes = originalBytes - optimizedBytes;
+          
+          document.getElementById('originalSize').textContent = formatSize(originalBytes);
+          document.getElementById('optimizedSize').textContent = formatSize(optimizedBytes);
+          document.getElementById('savedSize').textContent = (savedBytes >= 0 ? '-' : '+') + formatSize(Math.abs(savedBytes));
+          document.getElementById('savedSize').parentElement.style.background = savedBytes >= 0 ? '#d4edda' : '#f8d7da';
+          document.getElementById('compressionRatio').textContent = (data.compressionRatio * 100).toFixed(1) + '%';
+          document.getElementById('processingTime').textContent = data.processingTime + 'ms';
+          
+          const stepsList = document.getElementById('stepsList');
+          let stepsHtml = '<h3 style="margin-bottom:12px;">执行步骤</h3>';
+          if (data.conversion?.converted) {
+            stepsHtml += `<div class="step-item"><div class="icon success">✓</div><div class="name">格式转换 (${data.conversion.originalFormat} → GLB)</div><div class="duration">${data.conversion.conversionTime}ms</div></div>`;
+          }
+          stepsHtml += (data.steps || []).map(s => `<div class="step-item"><div class="icon ${s.success ? 'success' : 'error'}">${s.success ? '✓' : '✗'}</div><div class="name">${s.step}</div><div class="duration">${s.duration}ms</div></div>`).join('');
+          stepsList.innerHTML = stepsHtml;
+          
+          // 显示压缩后模型详情
+          displayOptimizedInfo(data, modelAnalysis);
+          
+          resultCard.classList.remove('hidden');
+        } else {
+          errorMsg.textContent = `错误: ${data.error?.message || '优化失败'}`;
+          errorMsg.classList.remove('hidden');
+        }
+      } catch (err) {
+        errorMsg.textContent = `请求失败: ${err.message}`;
+        errorMsg.classList.remove('hidden');
+      } finally {
+        loading.classList.remove('show');
+        optimizeBtn.disabled = false;
+      }
+    });
+
+    function displayOptimizedInfo(result, originalAnalysis) {
+      // 对比信息
+      const compareHtml = `
+        <div class="info-row">
+          <span class="label">文件大小变化</span>
+          <span class="value">${formatSize(originalAnalysis.fileSize)} → ${formatSize(result.optimizedSize)}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">压缩率</span>
+          <span class="value" style="color:${result.compressionRatio < 1 ? '#28a745' : '#dc3545'}">${((1 - result.compressionRatio) * 100).toFixed(1)}% ${result.compressionRatio < 1 ? '↓' : '↑'}</span>
+        </div>
+      `;
+      document.getElementById('compareInfo').innerHTML = compareHtml;
+      
+      // 从步骤结果中提取信息
+      const steps = result.steps || [];
+      
+      // 网格信息
+      let meshHtml = '';
+      const simplifyStep = steps.find(s => s.step === 'simplify');
+      const mergeStep = steps.find(s => s.step === 'merge');
+      const dracoStep = steps.find(s => s.step === 'draco');
+      const quantizeStep = steps.find(s => s.step === 'quantize');
+      
+      if (simplifyStep?.success && simplifyStep.stats) {
+        meshHtml += `
+          <div class="info-row"><span class="label">原始三角形</span><span class="value">${simplifyStep.stats.originalTriangles?.toLocaleString() || '-'}</span></div>
+          <div class="info-row"><span class="label">简化后三角形</span><span class="value">${simplifyStep.stats.simplifiedTriangles?.toLocaleString() || '-'}</span></div>
+          <div class="info-row"><span class="label">减少比例</span><span class="value" style="color:#28a745">${((simplifyStep.stats.reductionRatio || 0) * 100).toFixed(1)}%</span></div>
+        `;
+      }
+      if (mergeStep?.success && mergeStep.stats) {
+        meshHtml += `
+          <div class="info-row"><span class="label">合并前网格数</span><span class="value">${mergeStep.stats.originalMeshCount || '-'}</span></div>
+          <div class="info-row"><span class="label">合并后网格数</span><span class="value">${mergeStep.stats.mergedMeshCount || '-'}</span></div>
+        `;
+      }
+      if (dracoStep?.success && dracoStep.stats) {
+        meshHtml += `
+          <div class="info-row"><span class="label">Draco 压缩</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
+          <div class="info-row"><span class="label">压缩网格数</span><span class="value">${dracoStep.stats.meshesCompressed || '-'}</span></div>
+        `;
+      }
+      if (quantizeStep?.success && quantizeStep.stats) {
+        meshHtml += `
+          <div class="info-row"><span class="label">量化属性</span><span class="value">${(quantizeStep.stats.attributesQuantized || []).join(', ') || '-'}</span></div>
+          <div class="info-row"><span class="label">量化压缩比</span><span class="value" style="color:#28a745">${((1 - (quantizeStep.stats.reductionRatio || 1)) * 100).toFixed(1)}%</span></div>
+        `;
+      }
+      if (!meshHtml) {
+        meshHtml = `<div class="info-row"><span class="label">网格数</span><span class="value">${originalAnalysis.meshes.count}</span></div>
+                    <div class="info-row"><span class="label">三角形数</span><span class="value">${originalAnalysis.meshes.totalTriangles.toLocaleString()}</span></div>`;
+      }
+      document.getElementById('optimizedMeshInfo').innerHTML = meshHtml;
+      
+      // 纹理信息
+      let textureHtml = '';
+      const textureStep = steps.find(s => s.step === 'texture');
+      if (textureStep?.success && textureStep.stats) {
+        textureHtml = `
+          <div class="info-row"><span class="label">处理纹理数</span><span class="value">${textureStep.stats.texturesProcessed || 0}</span></div>
+          <div class="info-row"><span class="label">原始大小</span><span class="value">${formatSize(textureStep.stats.originalSize || 0)}</span></div>
+          <div class="info-row"><span class="label">压缩后大小</span><span class="value">${formatSize(textureStep.stats.compressedSize || 0)}</span></div>
+          <div class="info-row"><span class="label">纹理格式</span><span class="value"><span class="tag tag-success">KTX2/Basis</span></span></div>
+        `;
+      } else {
+        textureHtml = `
+          <div class="info-row"><span class="label">纹理数量</span><span class="value">${originalAnalysis.textures.count}</span></div>
+          <div class="info-row"><span class="label">纹理大小</span><span class="value">${formatSize(originalAnalysis.textures.totalSize)}</span></div>
+          <div class="info-row"><span class="label">纹理压缩</span><span class="value">${originalAnalysis.hasKTX2 ? '<span class="tag tag-success">KTX2</span>' : '<span class="tag tag-warning">未压缩</span>'}</span></div>
+        `;
+      }
+      document.getElementById('optimizedTextureInfo').innerHTML = textureHtml;
+      
+      // 扩展信息
+      let extList = [...(originalAnalysis.extensions || [])];
+      if (dracoStep?.success) extList.push('KHR_draco_mesh_compression');
+      if (textureStep?.success) extList.push('KHR_texture_basisu');
+      if (quantizeStep?.success) extList.push('KHR_mesh_quantization');
+      extList = [...new Set(extList)]; // 去重
+      
+      const extHtml = extList.length > 0 
+        ? extList.map(e => `<div class="info-row"><span class="value"><span class="tag tag-info">${e}</span></span></div>`).join('')
+        : '<div class="info-row"><span class="label">无扩展</span></div>';
+      document.getElementById('optimizedExtensions').innerHTML = extHtml;
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (currentTaskId) window.location.href = `/api/download/${currentTaskId}`;
+    });
+  </script>
+</body>
+</html>
