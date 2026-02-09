@@ -18,7 +18,7 @@ import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import { optimizeRouter, downloadRouter, statusRouter, analyzeRouter } from './routes';
-import { errorHandler, notFoundHandler } from './middleware';
+import { errorHandler, notFoundHandler, authMiddleware, isAuthEnabled } from './middleware';
 import { config } from './config';
 
 // Create Express application
@@ -28,7 +28,7 @@ const app: Express = express();
 app.use(cors({
   origin: config.corsOrigins,
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
 }));
 
 // Middleware configuration
@@ -61,11 +61,11 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// API Routes
-app.use('/api/optimize', optimizeRouter);
-app.use('/api/download', downloadRouter);
-app.use('/api/status', statusRouter);
-app.use('/api/analyze', analyzeRouter);
+// API Routes (with optional authentication)
+app.use('/api/optimize', authMiddleware, optimizeRouter);
+app.use('/api/download', authMiddleware, downloadRouter);
+app.use('/api/status', authMiddleware, statusRouter);
+app.use('/api/analyze', authMiddleware, analyzeRouter);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
@@ -79,6 +79,7 @@ if (require.main === module) {
     console.log(`三维模型优化服务运行在 http://${config.host}:${config.port}`);
     console.log(`API documentation available at http://${config.host}:${config.port}/api-docs`);
     console.log(`OpenAPI spec available at http://${config.host}:${config.port}/api-docs.json`);
+    console.log(`API authentication: ${isAuthEnabled() ? 'ENABLED (API_KEY required)' : 'DISABLED (open access)'}`);
   });
 }
 

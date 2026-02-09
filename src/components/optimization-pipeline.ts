@@ -38,6 +38,7 @@ import { simplifyMesh } from './mesh-simplifier';
 import { quantizeVertices } from './vertex-quantizer';
 import { compressDraco } from './draco-compressor';
 import { compressTextures } from './texture-compressor';
+import { repairInput, repairOutput } from './geometry-fixer';
 
 /**
  * Optimization step names in execution order.
@@ -45,12 +46,14 @@ import { compressTextures } from './texture-compressor';
  * @see Requirements 8.5 - Pipeline execution order
  */
 export const OPTIMIZATION_ORDER = [
-  'clean',      // 1. 资源清理
-  'merge',      // 2. Mesh 合并
-  'simplify',   // 3. 网格减面
-  'quantize',   // 4. 向量量化
-  'draco',      // 5. Draco 压缩
-  'texture',    // 6. 纹理压缩
+  'repair-input',  // 0. 输入修复 (always runs)
+  'clean',         // 1. 资源清理
+  'merge',         // 2. Mesh 合并
+  'simplify',      // 3. 网格减面
+  'quantize',      // 4. 向量量化
+  'draco',         // 5. Draco 压缩
+  'texture',       // 6. 纹理压缩
+  'repair-output', // 7. 输出修复 (always runs)
 ] as const;
 
 export type OptimizationStepName = (typeof OPTIMIZATION_ORDER)[number];
@@ -108,6 +111,10 @@ function isStepEnabled(
   options: OptimizationOptions
 ): boolean {
   switch (step) {
+    case 'repair-input':
+      return true; // always run
+    case 'repair-output':
+      return true; // always run
     case 'clean':
       return options.clean?.enabled ?? false;
     case 'merge':
@@ -144,6 +151,10 @@ async function executeStep(
     let stats: Record<string, unknown>;
 
     switch (step) {
+      case 'repair-input':
+        stats = { ...(await repairInput(document)) };
+        break;
+
       case 'clean':
         stats = { ...(await clean(document, options.clean)) };
         break;
@@ -175,6 +186,10 @@ async function executeStep(
           throw new Error('Texture options not provided');
         }
         stats = { ...(await compressTextures(document, options.texture)) };
+        break;
+
+      case 'repair-output':
+        stats = { ...(await repairOutput(document)) };
         break;
 
       default:

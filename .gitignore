@@ -33,4 +33,10 @@ tmp/
 temp/
 
 # Test resources (large files)
-resource/*.glb
+resource/
+
+# Debug pages
+public/test3d.html
+
+# Home directory artifacts
+~/

@@ -278,7 +278,7 @@ except Exception as e:
     sys.exit(1)
 `;
 
-  const result = await execAsync(`python3 -c '${pythonScript}'`, { timeout: 300000 });
+  const result = await execAsync(`python3 -c '${pythonScript}'`, { timeout: 300000, maxBuffer: 50 * 1024 * 1024 });
   
   let parseResult;
   try {
@@ -350,9 +350,7 @@ async function isUsdAvailable(): Promise<boolean> {
  * Convert USDZ to GLB using Python USD library.
  */
 async function convertUSDZtoGLB(inputPath: string, outputPath: string): Promise<void> {
-  // Check if USD is available
   const usdAvailable = await isUsdAvailable();
-  
   if (!usdAvailable) {
     throw new Error(
       'USDZ conversion requires usd-core Python package. ' +
@@ -360,164 +358,33 @@ async function convertUSDZtoGLB(inputPath: string, outputPath: string): Promise<
     );
   }
 
-  // Get the script path
+  // The Python script now writes GLB directly to disk and only outputs a small status JSON
   const scriptPath = path.join(__dirname, '../../scripts/usdz_to_glb.py');
-  
-  // Check if script exists, if not use inline Python
-  let result: { stdout: string; stderr: string };
-  
-  if (fs.existsSync(scriptPath)) {
-    result = await execAsync(`python3 "${scriptPath}" "${inputPath}" "${outputPath}"`, {
-      timeout: 120000,
-    });
-  } else {
-    // Inline Python script for USDZ extraction
-    const pythonScript = `
-import sys
-import json
-import os
 
-try:
-    from pxr import Usd, UsdGeom
-except ImportError:
-    print(json.dumps({"success": False, "error": "USD library not installed"}))
-    sys.exit(1)
-
-input_path = "${inputPath.replace(/\\/g, '\\\\')}"
-stage = Usd.Stage.Open(input_path)
-
-if not stage:
-    print(json.dumps({"success": False, "error": "Failed to open USDZ"}))
-    sys.exit(1)
-
-meshes = []
-for prim in stage.Traverse():
-    if prim.IsA(UsdGeom.Mesh):
-        mesh = UsdGeom.Mesh(prim)
-        points = mesh.GetPointsAttr().Get()
-        indices = mesh.GetFaceVertexIndicesAttr().Get()
-        counts = mesh.GetFaceVertexCountsAttr().Get()
-        normals = mesh.GetNormalsAttr().Get()
-        
-        if points and indices:
-            mesh_data = {
-                "name": prim.GetName(),
-                "points": [[float(p[0]), float(p[1]), float(p[2])] for p in points],
-                "indices": [int(i) for i in indices],
-                "counts": [int(c) for c in counts] if counts else [],
-            }
-            if normals:
-                mesh_data["normals"] = [[float(n[0]), float(n[1]), float(n[2])] for n in normals]
-            meshes.append(mesh_data)
-
-print(json.dumps({"success": True, "meshes": meshes}))
-`;
-    result = await execAsync(`python3 -c '${pythonScript}'`, { timeout: 120000 });
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error('USDZ conversion script not found: ' + scriptPath);
   }
 
-  // Parse the result
+  const result = await execAsync(
+    `python3 "${scriptPath}" "${inputPath}" "${outputPath}"`,
+    { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }
+  );
+
   let parseResult;
   try {
     parseResult = JSON.parse(result.stdout.trim());
   } catch {
-    throw new Error(`Failed to parse USDZ conversion result: ${result.stdout}`);
+    throw new Error(`Failed to parse USDZ conversion result: ${result.stdout.substring(0, 500)}`);
   }
 
   if (!parseResult.success) {
     throw new Error(parseResult.error || 'USDZ conversion failed');
   }
 
-  // Create GLB from mesh data
-  const document = new Document();
-  const buffer = document.createBuffer();
-
-  for (const meshData of parseResult.meshes) {
-    // Triangulate if needed (USD uses arbitrary polygons)
-    const positions: number[] = [];
-    const normals: number[] = [];
-    
-    const points = meshData.points;
-    const indices = meshData.indices;
-    const counts = meshData.counts || [];
-    const meshNormals = meshData.normals;
-
-    // Convert polygon faces to triangles
-    let indexOffset = 0;
-    for (const count of counts) {
-      if (count === 3) {
-        // Already a triangle
-        for (let i = 0; i < 3; i++) {
-          const idx = indices[indexOffset + i];
-          positions.push(...points[idx]);
-          if (meshNormals && meshNormals[indexOffset + i]) {
-            normals.push(...meshNormals[indexOffset + i]);
-          }
-        }
-      } else if (count > 3) {
-        // Fan triangulation for polygons
-        for (let i = 1; i < count - 1; i++) {
-          const i0 = indices[indexOffset];
-          const i1 = indices[indexOffset + i];
-          const i2 = indices[indexOffset + i + 1];
-          
-          positions.push(...points[i0], ...points[i1], ...points[i2]);
-          
-          if (meshNormals) {
-            const n0 = meshNormals[indexOffset] || [0, 1, 0];
-            const n1 = meshNormals[indexOffset + i] || [0, 1, 0];
-            const n2 = meshNormals[indexOffset + i + 1] || [0, 1, 0];
-            normals.push(...n0, ...n1, ...n2);
-          }
-        }
-      }
-      indexOffset += count;
-    }
-
-    // If no counts provided, assume triangles
-    if (counts.length === 0) {
-      for (let i = 0; i < indices.length; i++) {
-        const idx = indices[i];
-        positions.push(...points[idx]);
-        if (meshNormals && meshNormals[i]) {
-          normals.push(...meshNormals[i]);
-        }
-      }
-    }
-
-    // Create accessors
-    const positionAccessor = document
-      .createAccessor()
-      .setType('VEC3')
-      .setArray(new Float32Array(positions))
-      .setBuffer(buffer);
-
-    const primitive = document
-      .createPrimitive()
-      .setAttribute('POSITION', positionAccessor);
-
-    if (normals.length > 0) {
-      const normalAccessor = document
-        .createAccessor()
-        .setType('VEC3')
-        .setArray(new Float32Array(normals))
-        .setBuffer(buffer);
-      primitive.setAttribute('NORMAL', normalAccessor);
-    }
-
-    const mesh = document.createMesh(meshData.name).addPrimitive(primitive);
-    const node = document.createNode(meshData.name).setMesh(mesh);
-    
-    let scene = document.getRoot().getDefaultScene();
-    if (!scene) {
-      scene = document.createScene();
-      document.getRoot().setDefaultScene(scene);
-    }
-    scene.addChild(node);
+  // Verify output file exists
+  if (!fs.existsSync(outputPath)) {
+    throw new Error('USDZ conversion completed but output file not found');
   }
-
-  // Write GLB
-  const io = new NodeIO();
-  await io.write(outputPath, document);
 }
 
 /**

@@ -1,5 +1,6 @@
 services:
   glb-optimizer:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,6 +11,8 @@ services:
       - ./resource:/app/resource
       # Persist temp files (optional, for debugging)
       - ./temp:/app/temp
+      # Mount public folder for live UI development
+      - ./public:/app/public
     environment:
       - NODE_ENV=production
       - PORT=3000
