@@ -16,7 +16,6 @@
 
 import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression, KHRTextureBasisu } from '@gltf-transform/extensions';
-import * as draco3d from 'draco3d';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -39,6 +38,7 @@ import { quantizeVertices } from './vertex-quantizer';
 import { compressDraco } from './draco-compressor';
 import { compressTextures } from './texture-compressor';
 import { repairInput, repairOutput } from './geometry-fixer';
+import { getDracoModules } from './draco-singleton';
 
 /**
  * Optimization step names in execution order.
@@ -212,9 +212,12 @@ async function executeStep(
  * @param filePath - Path to the file
  * @returns File size in bytes, or 0 if file doesn't exist
  */
-function getFileSize(filePath: string): number {
+/**
+ * Get the file size in bytes (async).
+ */
+async function getFileSize(filePath: string): Promise<number> {
   try {
-    const stats = fs.statSync(filePath);
+    const stats = await fs.promises.stat(filePath);
     return stats.size;
   } catch {
     return 0;
@@ -266,7 +269,7 @@ export async function executePipeline(
   const steps: OptimizationStepResult[] = [];
 
   // Get original file size
-  const originalSize = getFileSize(inputPath);
+  const originalSize = await getFileSize(inputPath);
   if (originalSize === 0) {
     throw new PipelineError(
       ERROR_CODES.INVALID_FILE,
@@ -279,10 +282,7 @@ export async function executePipeline(
   // Create NodeIO with extensions
   const io = new NodeIO()
     .registerExtensions([KHRDracoMeshCompression, KHRTextureBasisu])
-    .registerDependencies({
-      'draco3d.decoder': await draco3d.createDecoderModule(),
-      'draco3d.encoder': await draco3d.createEncoderModule(),
-    });
+    .registerDependencies(await getDracoModules());
 
   // Read the input GLB file
   let document: Document;
@@ -343,7 +343,7 @@ export async function executePipeline(
   }
 
   // Get optimized file size
-  const optimizedSize = getFileSize(outputPath);
+  const optimizedSize = await getFileSize(outputPath);
 
   const processingTime = Date.now() - startTime;
 

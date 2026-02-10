@@ -24,6 +24,7 @@ import {
 } from '../components/format-converter';
 import { OptimizationOptions } from '../models/options';
 import { OptimizationError, ERROR_CODES } from '../models/error';
+import { validateOptions } from '../utils/options-validator';
 
 const router = Router();
 
@@ -188,6 +189,13 @@ router.post(
           });
         }
       }
+
+      // Validate and sanitize options
+      const { errors: validationErrors, sanitized } = validateOptions(options);
+      if (validationErrors.length > 0) {
+        console.warn('Options validation warnings:', validationErrors);
+      }
+      options = sanitized;
 
       // Get output path for result file
       const outputPath = getResultFilePath(taskId);

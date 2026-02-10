@@ -14,12 +14,14 @@
 
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import { optimizeRouter, downloadRouter, statusRouter, analyzeRouter } from './routes';
 import { errorHandler, notFoundHandler, authMiddleware, isAuthEnabled } from './middleware';
 import { config } from './config';
+import { cleanupOldFiles } from './utils/storage';
 
 // Create Express application
 const app: Express = express();
@@ -30,6 +32,23 @@ app.use(cors({
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
 }));
+
+// Gzip compression for all responses
+app.use(compression());
+
+// Request timeout (5 minutes for optimization, covers large models)
+const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+app.use((_req, res, next) => {
+  res.setTimeout(REQUEST_TIMEOUT_MS, () => {
+    if (!res.headersSent) {
+      res.status(408).json({
+        success: false,
+        error: { code: 'REQUEST_TIMEOUT', message: 'Request timed out' },
+      });
+    }
+  });
+  next();
+});
 
 // Middleware configuration
 // - JSON body parser with size limit
@@ -80,6 +99,22 @@ if (require.main === module) {
     console.log(`API documentation available at http://${config.host}:${config.port}/api-docs`);
     console.log(`OpenAPI spec available at http://${config.host}:${config.port}/api-docs.json`);
     console.log(`API authentication: ${isAuthEnabled() ? 'ENABLED (API_KEY required)' : 'DISABLED (open access)'}`);
+
+    // Auto-cleanup temp files older than 1 hour, every 10 minutes
+    const CLEANUP_INTERVAL = 10 * 60 * 1000;
+    const MAX_FILE_AGE = 60 * 60 * 1000;
+    setInterval(async () => {
+      try {
+        const result = await cleanupOldFiles(MAX_FILE_AGE);
+        const total = result.uploadsDeleted + result.resultsDeleted;
+        if (total > 0) {
+          console.log(`[cleanup] Removed ${total} expired temp files (uploads: ${result.uploadsDeleted}, results: ${result.resultsDeleted})`);
+        }
+      } catch (e) {
+        console.error('[cleanup] Failed:', e);
+      }
+    }, CLEANUP_INTERVAL);
+    console.log('Temp file auto-cleanup enabled (1h max age, 10min interval)');
   });
 }
 
