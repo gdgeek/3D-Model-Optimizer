@@ -144,12 +144,14 @@ describe('Optimization Pipeline', () => {
   describe('OPTIMIZATION_ORDER', () => {
     it('should define the correct execution order', () => {
       expect(OPTIMIZATION_ORDER).toEqual([
+        'repair-input',
         'clean',
         'merge',
         'simplify',
         'quantize',
         'draco',
         'texture',
+        'repair-output',
       ]);
     });
   });
@@ -247,12 +249,14 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(3);
+        expect(result.steps.length).toBe(5); // repair-input + 3 user steps + repair-output
 
-        // Verify order: clean → merge → quantize
-        expect(result.steps[0].step).toBe('clean');
-        expect(result.steps[1].step).toBe('merge');
-        expect(result.steps[2].step).toBe('quantize');
+        // Verify order: repair-input → clean → merge → quantize → repair-output
+        expect(result.steps[0].step).toBe('repair-input');
+        expect(result.steps[1].step).toBe('clean');
+        expect(result.steps[2].step).toBe('merge');
+        expect(result.steps[3].step).toBe('quantize');
+        expect(result.steps[4].step).toBe('repair-output');
       });
 
       it('should skip disabled steps', async () => {
@@ -266,9 +270,11 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(2);
-        expect(result.steps[0].step).toBe('clean');
-        expect(result.steps[1].step).toBe('quantize');
+        expect(result.steps.length).toBe(4); // repair-input + clean + quantize + repair-output
+        expect(result.steps[0].step).toBe('repair-input');
+        expect(result.steps[1].step).toBe('clean');
+        expect(result.steps[2].step).toBe('quantize');
+        expect(result.steps[3].step).toBe('repair-output');
       });
     });
 
@@ -281,8 +287,8 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(1);
-        expect(result.steps[0].step).toBe('clean');
+        expect(result.steps.length).toBe(3); // repair-input + clean + repair-output
+        expect(result.steps[1].step).toBe('clean');
       });
 
       it('should support merge only', async () => {
@@ -293,8 +299,8 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(1);
-        expect(result.steps[0].step).toBe('merge');
+        expect(result.steps.length).toBe(3);
+        expect(result.steps[1].step).toBe('merge');
       });
 
       it('should support simplify only', async () => {
@@ -305,8 +311,8 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(1);
-        expect(result.steps[0].step).toBe('simplify');
+        expect(result.steps.length).toBe(3);
+        expect(result.steps[1].step).toBe('simplify');
       });
 
       it('should support quantize only', async () => {
@@ -317,8 +323,8 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(1);
-        expect(result.steps[0].step).toBe('quantize');
+        expect(result.steps.length).toBe(3);
+        expect(result.steps[1].step).toBe('quantize');
       });
 
       it('should support draco only', async () => {
@@ -329,8 +335,8 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(1);
-        expect(result.steps[0].step).toBe('draco');
+        expect(result.steps.length).toBe(3);
+        expect(result.steps[1].step).toBe('draco');
       });
 
       it('should support all steps enabled', async () => {
@@ -346,15 +352,17 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(6);
+        expect(result.steps.length).toBe(8); // repair-input + 6 user steps + repair-output
 
         // Verify all steps executed in order
-        expect(result.steps[0].step).toBe('clean');
-        expect(result.steps[1].step).toBe('merge');
-        expect(result.steps[2].step).toBe('simplify');
-        expect(result.steps[3].step).toBe('quantize');
-        expect(result.steps[4].step).toBe('draco');
-        expect(result.steps[5].step).toBe('texture');
+        expect(result.steps[0].step).toBe('repair-input');
+        expect(result.steps[1].step).toBe('clean');
+        expect(result.steps[2].step).toBe('merge');
+        expect(result.steps[3].step).toBe('simplify');
+        expect(result.steps[4].step).toBe('quantize');
+        expect(result.steps[5].step).toBe('draco');
+        expect(result.steps[6].step).toBe('texture');
+        expect(result.steps[7].step).toBe('repair-output');
       });
 
       it('should support no steps enabled', async () => {
@@ -363,7 +371,7 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(true);
-        expect(result.steps.length).toBe(0);
+        expect(result.steps.length).toBe(2); // repair-input + repair-output always run
       });
     });
 
@@ -506,16 +514,20 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(false);
-        expect(result.steps.length).toBe(2); // clean succeeded, simplify failed
+        expect(result.steps.length).toBe(3); // repair-input succeeded, clean succeeded, simplify failed
 
-        // Clean should succeed
-        expect(result.steps[0].step).toBe('clean');
+        // repair-input should succeed
+        expect(result.steps[0].step).toBe('repair-input');
         expect(result.steps[0].success).toBe(true);
 
+        // Clean should succeed
+        expect(result.steps[1].step).toBe('clean');
+        expect(result.steps[1].success).toBe(true);
+
         // Simplify should fail
-        expect(result.steps[1].step).toBe('simplify');
-        expect(result.steps[1].success).toBe(false);
-        expect(result.steps[1].error).toBeDefined();
+        expect(result.steps[2].step).toBe('simplify');
+        expect(result.steps[2].success).toBe(false);
+        expect(result.steps[2].error).toBeDefined();
       });
 
       it('should not execute steps after a failure', async () => {
@@ -529,12 +541,13 @@ describe('Optimization Pipeline', () => {
         const result = await executePipeline(inputPath, outputPath, options);
 
         expect(result.success).toBe(false);
-        expect(result.steps.length).toBe(2); // Only clean and simplify
+        expect(result.steps.length).toBe(3); // repair-input, clean, and simplify (failed)
 
-        // Verify quantize and draco were not executed
+        // Verify quantize, draco, and repair-output were not executed
         const stepNames = result.steps.map((s) => s.step);
         expect(stepNames).not.toContain('quantize');
         expect(stepNames).not.toContain('draco');
+        expect(stepNames).not.toContain('repair-output');
       });
 
       it('should include error message in failed step result', async () => {
