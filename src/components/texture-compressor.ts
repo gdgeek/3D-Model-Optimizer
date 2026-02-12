@@ -16,6 +16,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import sharp from 'sharp';
+import logger from '../utils/logger';
 import {
   TextureOptions,
   DEFAULT_TEXTURE_OPTIONS,
@@ -284,7 +285,7 @@ export async function compressTextures(
       compressedSize += compressedData.byteLength;
     } catch (error) {
       // If compression fails, keep original
-      console.warn(`Failed to compress texture ${detail.name}:`, error);
+      logger.warn({ texture: detail.name, error }, 'Failed to compress texture');
       detail.compressedSize = texOriginalSize;
       compressedSize += texOriginalSize;
     }

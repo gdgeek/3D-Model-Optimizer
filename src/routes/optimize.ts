@@ -22,9 +22,10 @@ import {
   getFileExtension,
   SUPPORTED_FORMATS,
 } from '../components/format-converter';
-import { OptimizationOptions } from '../models/options';
+import { OptimizationOptions, OPTIMIZATION_PRESETS, PresetName } from '../models/options';
 import { OptimizationError, ERROR_CODES } from '../models/error';
 import { validateOptions } from '../utils/options-validator';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -177,11 +178,25 @@ router.post(
         inputGlbPath = uploadedFilePath;
       }
 
-      // Parse optimization options
+      // Parse optimization options (support preset or custom options)
       let options: OptimizationOptions = {};
+      const presetName = req.body.preset as PresetName | undefined;
+      if (presetName) {
+        if (!OPTIMIZATION_PRESETS[presetName]) {
+          throw new OptimizationError(ERROR_CODES.INVALID_OPTIONS, `Unknown preset: ${presetName}`, {
+            field: 'preset',
+            received: presetName,
+            expected: Object.keys(OPTIMIZATION_PRESETS).join(', '),
+          });
+        }
+        options = { ...OPTIMIZATION_PRESETS[presetName] };
+        logger.info({ preset: presetName }, 'Using optimization preset');
+      }
       if (req.body.options) {
         try {
-          options = JSON.parse(req.body.options);
+          const customOptions = JSON.parse(req.body.options);
+          // If preset was also specified, custom options override preset values
+          options = presetName ? { ...options, ...customOptions } : customOptions;
         } catch {
           throw new OptimizationError(ERROR_CODES.INVALID_OPTIONS, 'Invalid options JSON format', {
             field: 'options',
@@ -193,7 +208,7 @@ router.post(
       // Validate and sanitize options
       const { errors: validationErrors, sanitized } = validateOptions(options);
       if (validationErrors.length > 0) {
-        console.warn('Options validation warnings:', validationErrors);
+        logger.warn({ errors: validationErrors }, 'Options validation warnings');
       }
       options = sanitized;
 

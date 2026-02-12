@@ -354,3 +354,39 @@ export const DRACO_COMPRESSION_LEVEL_RANGE = {
  */
 export const TEXTURE_MODES = ['ETC1S', 'UASTC'] as const;
 export type TextureMode = (typeof TEXTURE_MODES)[number];
+
+/**
+ * Optimization presets for quick configuration.
+ * Users can select a preset instead of configuring each option manually.
+ */
+export type PresetName = 'fast' | 'balanced' | 'maximum';
+
+export const OPTIMIZATION_PRESETS: Record<PresetName, OptimizationOptions> = {
+  /** Fast: minimal processing, quick results */
+  fast: {
+    clean: { enabled: true, removeUnusedNodes: true, removeUnusedMaterials: true, removeUnusedTextures: true },
+    merge: { enabled: false },
+    simplify: { enabled: false },
+    quantize: { enabled: false },
+    draco: { enabled: true, compressionLevel: 3 },
+    texture: { enabled: false },
+  },
+  /** Balanced: good compression with reasonable quality */
+  balanced: {
+    clean: { enabled: true, removeUnusedNodes: true, removeUnusedMaterials: true, removeUnusedTextures: true },
+    merge: { enabled: true },
+    simplify: { enabled: true, targetRatio: 0.75, error: 0.01 },
+    quantize: { enabled: false },
+    draco: { enabled: true, compressionLevel: 7 },
+    texture: { enabled: true, mode: 'ETC1S', quality: 128 },
+  },
+  /** Maximum: aggressive compression for smallest file size */
+  maximum: {
+    clean: { enabled: true, removeUnusedNodes: true, removeUnusedMaterials: true, removeUnusedTextures: true },
+    merge: { enabled: true },
+    simplify: { enabled: true, targetRatio: 0.5, error: 0.02 },
+    quantize: { enabled: false },
+    draco: { enabled: true, compressionLevel: 10 },
+    texture: { enabled: true, mode: 'ETC1S', quality: 80 },
+  },
+};

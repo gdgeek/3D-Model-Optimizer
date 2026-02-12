@@ -15,13 +15,15 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import helmet from 'helmet';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
-import { optimizeRouter, downloadRouter, statusRouter, analyzeRouter } from './routes';
+import { optimizeRouter, downloadRouter, statusRouter, analyzeRouter, progressRouter } from './routes';
 import { errorHandler, notFoundHandler, authMiddleware, isAuthEnabled } from './middleware';
 import { config } from './config';
 import { cleanupOldFiles } from './utils/storage';
+import logger from './utils/logger';
 
 // Create Express application
 const app: Express = express();
@@ -31,6 +33,12 @@ app.use(cors({
   origin: config.corsOrigins,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+}));
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for static UI with CDN resources
+  crossOriginEmbedderPolicy: false,
 }));
 
 // Gzip compression for all responses
@@ -81,6 +89,7 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // API Routes (with optional authentication)
+app.use('/api/optimize/stream', authMiddleware, progressRouter);
 app.use('/api/optimize', authMiddleware, optimizeRouter);
 app.use('/api/download', authMiddleware, downloadRouter);
 app.use('/api/status', authMiddleware, statusRouter);
@@ -95,10 +104,9 @@ app.use(errorHandler);
 // Start server
 if (require.main === module) {
   app.listen(config.port, () => {
-    console.log(`三维模型优化服务运行在 http://${config.host}:${config.port}`);
-    console.log(`API documentation available at http://${config.host}:${config.port}/api-docs`);
-    console.log(`OpenAPI spec available at http://${config.host}:${config.port}/api-docs.json`);
-    console.log(`API authentication: ${isAuthEnabled() ? 'ENABLED (API_KEY required)' : 'DISABLED (open access)'}`);
+    logger.info({ host: config.host, port: config.port }, '三维模型优化服务已启动');
+    logger.info({ url: `http://${config.host}:${config.port}/api-docs` }, 'API documentation available');
+    logger.info({ auth: isAuthEnabled() ? 'enabled' : 'disabled' }, 'Authentication status');
 
     // Auto-cleanup temp files older than 1 hour, every 10 minutes
     const CLEANUP_INTERVAL = 10 * 60 * 1000;
@@ -108,13 +116,13 @@ if (require.main === module) {
         const result = await cleanupOldFiles(MAX_FILE_AGE);
         const total = result.uploadsDeleted + result.resultsDeleted;
         if (total > 0) {
-          console.log(`[cleanup] Removed ${total} expired temp files (uploads: ${result.uploadsDeleted}, results: ${result.resultsDeleted})`);
+          logger.info({ uploads: result.uploadsDeleted, results: result.resultsDeleted }, 'Cleaned up expired temp files');
         }
       } catch (e) {
-        console.error('[cleanup] Failed:', e);
+        logger.error({ error: e }, 'Cleanup failed');
       }
     }, CLEANUP_INTERVAL);
-    console.log('Temp file auto-cleanup enabled (1h max age, 10min interval)');
+    logger.info('Temp file auto-cleanup enabled (1h max age, 10min interval)');
   });
 }
 

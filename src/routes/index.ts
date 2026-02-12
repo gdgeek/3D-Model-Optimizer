@@ -12,4 +12,5 @@ export { default as optimizeRouter } from './optimize';
 export { default as downloadRouter } from './download';
 export { default as statusRouter } from './status';
 export { default as analyzeRouter } from './analyze';
+export { default as progressRouter } from './progress';
 export { storeTask, getTask, updateTask } from './status';

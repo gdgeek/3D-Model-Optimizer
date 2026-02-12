@@ -19,7 +19,7 @@ const execAsync = promisify(exec);
 /**
  * Supported input formats for conversion.
  */
-export const SUPPORTED_FORMATS = ['.glb', '.gltf', '.obj', '.stl', '.fbx', '.usdz', '.dae', '.step', '.stp'] as const;
+export const SUPPORTED_FORMATS = ['.glb', '.gltf', '.obj', '.stl', '.fbx', '.usdz', '.dae', '.step', '.stp', '.prt', '.catpart', '.catproduct', '.asm'] as const;
 export type SupportedFormat = (typeof SUPPORTED_FORMATS)[number];
 
 /**
@@ -293,6 +293,51 @@ except Exception as e:
 }
 
 /**
+ * Convert CAD formats (PRT, CATProduct, CATPart, ASM) to GLB via Python trimesh/cadquery.
+ * These are proprietary CAD formats that require OpenCASCADE (via cadquery/OCP) for reading.
+ */
+async function convertCADtoGLB(inputPath: string, outputPath: string, format: string): Promise<void> {
+  const stepAvailable = await isStepConverterAvailable();
+
+  if (!stepAvailable) {
+    throw new Error(
+      format.toUpperCase() + ' conversion requires Python trimesh + cadquery/OCP. ' +
+      'Run in Docker or install with: pip install trimesh cadquery OCP'
+    );
+  }
+
+  const escapedInput = inputPath.replace(/\\/g, '\\\\');
+  const escapedOutput = outputPath.replace(/\\/g, '\\\\');
+
+  const pythonScript = `
+import sys
+import json
+import trimesh
+
+try:
+    mesh = trimesh.load("${escapedInput}")
+    mesh.export("${escapedOutput}", file_type='glb')
+    print(json.dumps({"success": True}))
+except Exception as e:
+    print(json.dumps({"success": False, "error": str(e)}))
+    sys.exit(1)
+`;
+
+  const result = await execAsync("python3 -c '" + pythonScript + "'", { timeout: 300000, maxBuffer: 50 * 1024 * 1024 });
+
+  let parseResult;
+  try {
+    parseResult = JSON.parse(result.stdout.trim());
+  } catch {
+    throw new Error('Failed to parse ' + format.toUpperCase() + ' conversion result: ' + result.stdout);
+  }
+
+  if (!parseResult.success) {
+    throw new Error(parseResult.error || format.toUpperCase() + ' conversion failed');
+  }
+}
+
+/**
  * Check if FBX2glTF is available.
  */
 async function isFbx2gltfAvailable(): Promise<boolean> {
@@ -463,6 +508,13 @@ export async function convertToGLB(
       case '.step':
       case '.stp':
         await convertSTEPtoGLB(inputPath, outputPath);
+        break;
+
+      case '.prt':
+      case '.catpart':
+      case '.catproduct':
+      case '.asm':
+        await convertCADtoGLB(inputPath, outputPath, ext.slice(1));
         break;
 
       default:

@@ -21,6 +21,18 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import { OptimizationOptions } from '../models/options';
+
+/**
+ * Progress callback type for reporting pipeline step progress.
+ */
+export type ProgressCallback = (event: {
+  step: string;
+  status: 'start' | 'done' | 'error';
+  index: number;
+  total: number;
+  duration?: number;
+  error?: string;
+}) => void;
 import {
   OptimizationResult,
   OptimizationStepResult,
@@ -262,7 +274,8 @@ async function getFileSize(filePath: string): Promise<number> {
 export async function executePipeline(
   inputPath: string,
   outputPath: string,
-  options: OptimizationOptions
+  options: OptimizationOptions,
+  onProgress?: ProgressCallback
 ): Promise<OptimizationResult> {
   const taskId = uuidv4();
   const startTime = Date.now();
@@ -299,14 +312,27 @@ export async function executePipeline(
     );
   }
 
+  // Count enabled steps for progress reporting
+  const enabledSteps = OPTIMIZATION_ORDER.filter(s => isStepEnabled(s, options));
+  const totalSteps = enabledSteps.length;
+
   // Execute enabled steps in order
   for (const step of OPTIMIZATION_ORDER) {
     if (!isStepEnabled(step, options)) {
       continue;
     }
 
+    const stepIndex = enabledSteps.indexOf(step);
+    onProgress?.({ step, status: 'start', index: stepIndex, total: totalSteps });
+
     const stepResult = await executeStep(step, document, options);
     steps.push(stepResult);
+
+    if (!stepResult.success) {
+      onProgress?.({ step, status: 'error', index: stepIndex, total: totalSteps, duration: stepResult.duration, error: stepResult.error });
+    } else {
+      onProgress?.({ step, status: 'done', index: stepIndex, total: totalSteps, duration: stepResult.duration });
+    }
 
     // Stop on failure (Requirement 8.3)
     if (!stepResult.success) {

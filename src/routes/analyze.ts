@@ -14,7 +14,7 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression, KHRTextureBasisu } from '@gltf-transform/extensions';
-import * as draco3d from 'draco3d';
+import { getDracoModules } from '../components/draco-singleton';
 import { FILE_CONSTRAINTS } from '../utils/file-validator';
 import {
   convertToGLB,
@@ -282,10 +282,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response, next
     // Read and analyze GLB
     const io = new NodeIO()
       .registerExtensions([KHRDracoMeshCompression, KHRTextureBasisu])
-      .registerDependencies({
-        'draco3d.decoder': await draco3d.createDecoderModule(),
-        'draco3d.encoder': await draco3d.createEncoderModule(),
-      });
+      .registerDependencies(await getDracoModules());
 
     const document = await io.read(glbPath);
     const analysis = await analyzeDocument(document, originalFilename, fileBuffer.length);

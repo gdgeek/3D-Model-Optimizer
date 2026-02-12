@@ -10,6 +10,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { OptimizationError, ERROR_CODES, ErrorResponse, ErrorCode } from '../models/error';
 import multer from 'multer';
+import logger from '../utils/logger';
 
 /**
  * HTTP status codes for different error types.
@@ -74,13 +75,13 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  // Log error for debugging (in production, use proper logging)
-  console.error('[Error]', {
+  // Log error for debugging
+  logger.error({
     name: err.name,
     message: err.message,
     path: req.path,
     method: req.method,
-  });
+  }, 'Request error');
 
   // Handle OptimizationError (custom application errors)
   if (err instanceof OptimizationError) {

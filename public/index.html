@@ -96,10 +96,10 @@
         <div class="sidebar-section">
           <h6><i class="bi bi-cloud-arrow-up"></i> 上传模型</h6>
           <div class="drop-zone" id="uploadArea">
-            <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.stl,.fbx,.usdz,.dae,.step,.stp">
+            <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.stl,.fbx,.usdz,.dae,.step,.stp,.prt,.catpart,.catproduct,.asm">
             <i class="bi bi-cloud-arrow-up-fill d-block mb-2" style="font-size:1.8rem;color:#adb5bd;"></i>
             <p class="text-secondary small mb-1">点击或拖拽文件到此处</p>
-            <p class="text-muted mb-0" style="font-size:0.7rem;">GLB · GLTF · OBJ · STL · DAE · FBX · USDZ · STEP</p>
+            <p class="text-muted mb-0" style="font-size:0.7rem;">GLB · GLTF · OBJ · STL · DAE · FBX · USDZ · STEP · PRT · CATIA · ASM</p>
             <div class="mt-2 fw-medium small" style="color:var(--accent);" id="fileName"></div>
           </div>
           <div class="loading-box" id="analyzeLoading">
@@ -119,6 +119,15 @@
         <!-- Options -->
         <div class="sidebar-section hidden" id="optionsSection">
           <h6><i class="bi bi-sliders"></i> 优化选项</h6>
+          <!-- Presets -->
+          <div class="mb-3">
+            <div class="d-flex gap-1 mb-2">
+              <button class="btn btn-sm btn-outline-secondary flex-fill preset-btn" data-preset="fast"><i class="bi bi-lightning me-1"></i>快速</button>
+              <button class="btn btn-sm btn-outline-secondary flex-fill preset-btn" data-preset="balanced"><i class="bi bi-balance-scale me-1"></i>均衡</button>
+              <button class="btn btn-sm btn-outline-secondary flex-fill preset-btn" data-preset="maximum"><i class="bi bi-arrows-collapse me-1"></i>极限</button>
+            </div>
+            <div class="text-muted" style="font-size:0.7rem;" id="presetDesc"></div>
+          </div>
           <div class="form-check mb-1"><input class="form-check-input" type="checkbox" id="cleanEnabled" checked><label class="form-check-label small" for="cleanEnabled">资源清理</label></div>
           <div class="ps-4 mb-2">
             <div class="form-check"><input class="form-check-input" type="checkbox" id="removeUnusedNodes" checked><label class="form-check-label small text-muted" for="removeUnusedNodes">未使用节点</label></div>
@@ -141,7 +150,8 @@
           </div>
           <div class="loading-box" id="loading">
             <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-            <p class="text-secondary small mt-2 mb-0">优化处理中...</p>
+            <p class="text-secondary small mt-2 mb-0" id="loadingText">优化处理中...</p>
+            <div id="progressSteps" class="mt-2 text-start"></div>
           </div>
         </div>
 
@@ -402,7 +412,7 @@
 
     async function handleFile(file) {
       const ext = file.name.split('.').pop().toLowerCase();
-      if (!['glb','gltf','obj','stl','fbx','usdz','dae','step','stp'].includes(ext)) { alert('不支持的文件格式'); return; }
+      if (!['glb','gltf','obj','stl','fbx','usdz','dae','step','stp','prt','catpart','catproduct','asm'].includes(ext)) { alert('不支持的文件格式'); return; }
       if (file.size > 100 * 1024 * 1024) { alert('文件超过 100MB'); return; }
       selectedFile = file;
       fileName.textContent = `${file.name} (${formatSize(file.size)})`;
@@ -441,24 +451,109 @@
       if (a.hasKTX2) { document.getElementById('ktx2Hint').classList.remove('hidden'); document.getElementById('textureEnabled').checked = false; } else document.getElementById('ktx2Hint').classList.add('hidden');
     }
 
-    // ===== Optimize =====
+    // ===== Presets =====
+    let activePreset = null;
+    const presetDescriptions = {
+      fast: '快速模式：资源清理 + 顶点量化 + 轻度 Draco 压缩',
+      balanced: '均衡模式：全部优化，保留 75% 面数，ETC1S 纹理压缩',
+      maximum: '极限模式：激进压缩，50% 面数，最高 Draco 级别',
+    };
+    const presetOptions = {
+      fast: { clean: true, merge: false, simplify: false, quantize: false, draco: true, dracoLevel: 3, texture: false },
+      balanced: { clean: true, merge: true, simplify: true, ratio: 0.75, quantize: false, draco: true, dracoLevel: 7, texture: true, texMode: 'ETC1S' },
+      maximum: { clean: true, merge: true, simplify: true, ratio: 0.5, quantize: false, draco: true, dracoLevel: 10, texture: true, texMode: 'ETC1S' },
+    };
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const preset = this.dataset.preset;
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        if (activePreset === preset) { activePreset = null; document.getElementById('presetDesc').textContent = ''; return; }
+        activePreset = preset;
+        this.classList.add('active');
+        document.getElementById('presetDesc').textContent = presetDescriptions[preset];
+        const p = presetOptions[preset];
+        document.getElementById('cleanEnabled').checked = p.clean;
+        document.getElementById('mergeEnabled').checked = p.merge;
+        document.getElementById('simplifyEnabled').checked = p.simplify;
+        if (p.ratio) document.getElementById('targetRatio').value = p.ratio;
+        document.getElementById('quantizeEnabled').checked = p.quantize;
+        document.getElementById('dracoEnabled').checked = p.draco;
+        if (p.dracoLevel) document.getElementById('compressionLevel').value = p.dracoLevel;
+        document.getElementById('textureEnabled').checked = p.texture;
+        if (p.texMode) document.getElementById('textureMode').value = p.texMode;
+      });
+    });
+
+    // ===== Optimize (SSE with progress) =====
     optimizeBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
       loading.classList.add('show'); resultSection.classList.add('hidden'); errorMsg.classList.add('hidden'); optimizeBtn.disabled = true;
-      const fd = new FormData(); fd.append('file', selectedFile); fd.append('options', JSON.stringify(getOptions()));
+      document.getElementById('progressSteps').innerHTML = '';
+      document.getElementById('loadingText').textContent = '优化处理中...';
+
+      const fd = new FormData(); fd.append('file', selectedFile);
+      if (activePreset) fd.append('preset', activePreset);
+      else fd.append('options', JSON.stringify(getOptions()));
+
       try {
-        const res = await fetch('/api/optimize', { method: 'POST', body: fd, headers: getAuthHeaders() });
-        const data = await res.json();
-        if (data.success) {
-          currentTaskId = data.taskId; displayResult(data); resultSection.classList.remove('hidden');
+        const res = await fetch('/api/optimize/stream', { method: 'POST', body: fd, headers: getAuthHeaders() });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalResult = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          let currentEvent = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) currentEvent = line.slice(7);
+            else if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (currentEvent === 'progress') {
+                  const stepsEl = document.getElementById('progressSteps');
+                  const stepId = `step-${data.step}`;
+                  let el = document.getElementById(stepId);
+                  if (data.status === 'start') {
+                    if (!el) {
+                      el = document.createElement('div');
+                      el.id = stepId;
+                      el.className = 'step-item';
+                      stepsEl.appendChild(el);
+                    }
+                    el.innerHTML = `<span class="step-icon bg-warning-subtle text-warning"><div class="spinner-border spinner-border-sm" style="width:12px;height:12px;border-width:2px;"></div></span><span class="flex-grow-1">${data.stepName || data.step}</span>`;
+                    document.getElementById('loadingText').textContent = `正在执行: ${data.stepName || data.step}`;
+                  } else if (data.status === 'done') {
+                    if (el) el.innerHTML = `<span class="step-icon bg-success-subtle text-success">✓</span><span class="flex-grow-1">${data.stepName || data.step}</span><span class="text-muted small">${data.duration || 0}ms</span>`;
+                  } else if (data.status === 'error') {
+                    if (el) el.innerHTML = `<span class="step-icon bg-danger-subtle text-danger">✗</span><span class="flex-grow-1">${data.stepName || data.step}</span><span class="text-danger small">${data.error || ''}</span>`;
+                  }
+                } else if (currentEvent === 'result') {
+                  finalResult = data;
+                } else if (currentEvent === 'error') {
+                  showError(`优化失败: ${data.message || '未知错误'}`);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        if (finalResult && finalResult.success) {
+          currentTaskId = finalResult.taskId; displayResult(finalResult); resultSection.classList.remove('hidden');
           rightModel = clearModel(rightScene, rightModel); document.getElementById('placeholderRight').style.display = 'none';
-          const dlUrl = apiKey ? `/api/download/${data.taskId}?api_key=${encodeURIComponent(apiKey)}` : `/api/download/${data.taskId}`;
+          const dlUrl = apiKey ? `/api/download/${finalResult.taskId}?api_key=${encodeURIComponent(apiKey)}` : `/api/download/${finalResult.taskId}`;
           try {
             rightModel = await loadModelFromUrl(dlUrl, rightScene, 'right'); fitCamera(rightCamera, rightControls, rightModel);
             if (wireframeMode) toggleWireframe(rightModel, true);
             if (document.getElementById('syncCameras').checked && leftModel) { rightCamera.position.copy(leftCamera.position); rightCamera.rotation.copy(leftCamera.rotation); rightControls.target.copy(leftControls.target); rightControls.update(); }
           } catch (e) { console.warn('Could not load optimized preview:', e); document.getElementById('placeholderRight').style.display = 'flex'; document.getElementById('placeholderRight').textContent = '预览不可用'; }
-        } else showError(`优化失败: ${data.error?.message || '未知错误'}`);
+        } else if (finalResult) {
+          showError(`优化失败: ${finalResult.error || '未知错误'}`);
+        }
       } catch (err) { showError(`请求失败: ${err.message}`); }
       finally { loading.classList.remove('show'); optimizeBtn.disabled = false; }
     });
